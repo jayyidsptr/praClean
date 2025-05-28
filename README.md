@@ -7,6 +7,12 @@ PRA CLEAN Utility adalah sebuah skrip Bash interaktif yang canggih, dirancang un
 **Dikembangkan oleh:** jayyidsptr
 **GitHub:** [https://github.com/jayyidsptr](https://github.com/jayyidsptr)
 
+## Tangkapan Layar (Screenshot)
+
+Berikut adalah tampilan dari PRA CLEAN Utility saat dijalankan:
+
+![PRA CLEAN Utility Screenshot](assets/screenshot_praclean.png "PRA CLEAN Utility sedang berjalan")
+
 ## Fitur Utama
 
 * **Antarmuka Interaktif Berwarna Modern:** Menu yang mudah dinavigasi dengan output berwarna, animasi loading, dan bingkai menu yang lebih rapi.
@@ -95,6 +101,21 @@ PRA CLEAN Utility adalah sebuah skrip Bash interaktif yang canggih, dirancang un
 
 6.  **Navigasi Menu:**
     Ikuti menu interaktif. Opsi yang terintegrasi dengan AI akan ditandai.
+
+## Dukungan & Donasi
+
+Jika Anda merasa skrip ini bermanfaat dan ingin mendukung pengembangan lebih lanjut, Anda dapat memberikan donasi melalui platform berikut:
+
+<p align="left">
+  <a href="https://trakteer.id/jayyidsptr" target="_blank">
+    <img src="https://img.shields.io/badge/Dukung%20Saya%20di-Trakteer-FF750A?style=for-the-badge&logo=trakteer&logoColor=white" alt="Dukung Saya di Trakteer">
+  </a>
+  <a href="https://saweria.co/jayyidsaputra" target="_blank">
+    <img src="https://img.shields.io/badge/Donasi%20via-Saweria-20C659?style=for-the-badge&logo=saweria&logoColor=white" alt="Donasi via Saweria">
+  </a>
+</p>
+
+Setiap dukungan sangat berarti! Terima kasih.
 
 ## Peringatan Penting
 
