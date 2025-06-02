@@ -43,16 +43,16 @@ show_loading_animation() {
     local end_time=$((SECONDS + duration))
 
     echo
-    tput civis
+    tput civis # Sembunyikan kursor
     while [ $SECONDS -lt $end_time ]; do
         local temp=${spinstr#?}
         printf "  ${BOLD_CYAN}Memuat PRA CLEAN Utility %c ${DEFAULT_COLOR}" "$spinstr"
         spinstr=$temp${spinstr%"$temp"}
         sleep $delay
-        printf "\r"
+        printf "\r" # Kembali ke awal baris
     done
-    printf "                                        \r"
-    tput cnorm
+    printf "                                        \r" # Hapus baris animasi
+    tput cnorm # Tampilkan kursor kembali
     echo
 }
 
@@ -77,43 +77,38 @@ check_ai_dependencies() {
         press_enter_to_continue
     fi
 
-    # Cek untuk glow secara terpisah karena ini opsional untuk rendering
     if command -v glow &> /dev/null; then
         GLOW_INSTALLED=1
     else
         GLOW_INSTALLED=0
         echo -e "  ${INFO_PREFIX} Untuk tampilan respons AI yang lebih baik, disarankan menginstal 'glow'."
         echo -e "  ${CYAN}(Kunjungi: https://github.com/charmbracelet/glow)${DEFAULT_COLOR}"
-        # Tidak perlu press_enter_to_continue di sini, hanya info
     fi
 }
 
 get_gemini_api_key() {
-    if [ -n "$GEMINI_API_KEY" ]; then
-        return 0
-    fi
+    if [ -n "$GEMINI_API_KEY" ]; then return 0; fi
     if [ -n "$PRA_CLEAN_GEMINI_API_KEY" ]; then
-        GEMINI_API_KEY="$PRA_CLEAN_GEMINI_API_KEY"
-        return 0
+        GEMINI_API_KEY="$PRA_CLEAN_GEMINI_API_KEY"; return 0
     fi
     
     echo -e "  ${INFO_PREFIX} Fitur AI Gemini memerlukan API Key."
-    echo -e "  ${CYAN}Anda bisa mendapatkan API Key dari Google AI Studio: https://aistudio.google.com/app/apikey ${DEFAULT_COLOR}"
+    echo -e "  ${CYAN}Dapatkan dari Google AI Studio: https://aistudio.google.com/app/apikey ${DEFAULT_COLOR}"
     echo -e "  ${YELLOW}Disarankan mengatur variabel environment 'PRA_CLEAN_GEMINI_API_KEY'.${DEFAULT_COLOR}"
-    read -s -p "$(echo -e "  ${QUESTION_PREFIX} Masukkan API Key Gemini Anda (kosongkan untuk melewati): ")" key_input
+    read -s -p "$(echo -e "  ${QUESTION_PREFIX} Masukkan API Key Gemini (kosongkan untuk melewati): ")" key_input
     echo
     if [ -n "$key_input" ]; then
         GEMINI_API_KEY="$key_input"
         echo -e "  ${INFO_PREFIX} API Key Gemini disimpan untuk sesi ini."
     else
-        echo -e "  ${SKIPPED_PREFIX} Tidak ada API Key. Fitur AI akan dilewati."
-        GEMINI_API_KEY=""
+        echo -e "  ${SKIPPED_PREFIX} Tidak ada API Key. Fitur AI akan dilewati."; GEMINI_API_KEY=""
     fi
 }
 
-jelaskan_dengan_ai() {
-    local perintah_untuk_dijelaskan="$1"
-    local konteks_tambahan="$2"
+# Fungsi generik untuk berinteraksi dengan AI Gemini
+# Argumen 1: Teks prompt lengkap untuk AI
+ask_ai_gemini() {
+    local prompt_text="$1"
 
     if [ "$AI_DEPENDENCIES_MET" -eq 0 ]; then
         echo -e "  ${ERROR_PREFIX} Dependensi dasar AI (curl/jq) tidak terpenuhi."
@@ -122,7 +117,7 @@ jelaskan_dengan_ai() {
     if [ -z "$GEMINI_API_KEY" ]; then
         get_gemini_api_key
         if [ -z "$GEMINI_API_KEY" ]; then
-            echo -e "  ${SKIPPED_PREFIX} Tidak ada API Key Gemini. Penjelasan AI dilewati."
+            echo -e "  ${SKIPPED_PREFIX} Tidak ada API Key Gemini. Tugas AI dilewati."
             return 1
         fi
     fi
@@ -130,38 +125,19 @@ jelaskan_dengan_ai() {
     echo -e "  ${INFO_PREFIX} Menghubungi AI Gemini (mungkin perlu beberapa saat)..."
     tput civis
 
-    local prompt_text="Anda adalah asisten AI yang membantu pengguna memahami perintah-perintah pada sistem operasi Linux.
-Jelaskan perintah Bash berikut ini secara detail, aman, dan mudah dipahami untuk pengguna awam hingga menengah.
-Sertakan poin-poin berikut:
-1.  Apa tujuan utama dari perintah ini?
-2.  Bagian-bagian penting dari perintah dan artinya (jika ada opsi atau argumen khusus).
-3.  File atau direktori apa saja yang berpotensi terdampak secara langsung?
-4.  Apa saja potensi risiko atau hal yang perlu diwaspadai sebelum menjalankan perintah ini?
-5.  Apakah ada alternatif yang lebih aman atau cara untuk membatasi dampaknya (jika relevan)?
-
-Konteks tambahan: ${konteks_tambahan}
-
-Perintah yang perlu dijelaskan:
-\`\`\`bash
-${perintah_untuk_dijelaskan}
-\`\`\`
-Berikan penjelasan dalam format Markdown yang rapi dan terstruktur dengan baik untuk dibaca di terminal. Gunakan heading Markdown (#, ##, ###) untuk bagian-bagian utama dan sub-bagian, serta daftar (bullet points atau nomor) untuk detail."
-
-
     local json_payload
     json_payload=$(jq -n \
                   --arg prompt "$prompt_text" \
                   '{ "contents": [ { "parts": [ { "text": $prompt } ] } ],
                      "generationConfig": {
-                       "temperature": 0.4, 
-                       "maxOutputTokens": 1536
+                       "temperature": 0.5, 
+                       "maxOutputTokens": 2048 
                      } }')
 
     local response
     response=$(curl -s -X POST "${GEMINI_API_ENDPOINT}?key=${GEMINI_API_KEY}" \
               -H "Content-Type: application/json" \
               -d "$json_payload")
-    
     tput cnorm
 
     if [ -z "$response" ]; then
@@ -179,22 +155,16 @@ Berikan penjelasan dalam format Markdown yang rapi dan terstruktur dengan baik u
     explanation=$(echo "$response" | jq -r '.candidates[0].content.parts[0].text // ""')
 
     if [[ -z "$explanation" ]]; then
-        echo -e "  ${WARNING_PREFIX} AI Gemini tidak memberikan penjelasan atau format respons tidak dikenal."
-        # echo "Respons mentah: $response" # Untuk debug
+        echo -e "  ${WARNING_PREFIX} AI Gemini tidak memberikan respons atau format tidak dikenal."
         return 1
     fi
 
-    echo -e "\n  ${AI_PREFIX} Berikut penjelasan dari AI Gemini:"
+    echo -e "\n  ${AI_PREFIX} Berikut respons dari AI Gemini:"
     echo -e "${CYAN}---------------------------------------------------------------------${DEFAULT_COLOR}"
     if [ "$GLOW_INSTALLED" -eq 1 ]; then
-        # Gunakan glow untuk rendering jika terinstal
-        # Mungkin perlu menyimpan ke file sementara jika penjelasan sangat panjang
-        # atau jika glow tidak menerima stdin dengan baik untuk beberapa kasus.
-        # Untuk kesederhanaan, kita coba pipe langsung.
-        echo -e "${explanation}" | glow -s dark -w "$(( $(tput cols) - 8 ))" # Sesuaikan lebar dengan terminal
+        echo -e "${explanation}" | glow -s dark -w "$(( $(tput cols) - 8 ))"
     else
-        # Fallback jika glow tidak ada
-        echo -e "${explanation}" | sed 's/^/    /' # Indentasi standar
+        echo -e "${explanation}" | sed 's/^/    /'
     fi
     echo -e "${CYAN}---------------------------------------------------------------------${DEFAULT_COLOR}"
     return 0
@@ -204,15 +174,14 @@ Berikan penjelasan dalam format Markdown yang rapi dan terstruktur dengan baik u
 check_sudo() {
     if [[ "$EUID" -ne 0 ]]; then
         echo -e "${WARNING_PREFIX} Skrip ini memerlukan hak akses root."
-        echo -e "${INFO_PREFIX} Silakan jalankan ulang dengan sudo: sudo $0"
-        exit 1
+        echo -e "${INFO_PREFIX} Silakan jalankan ulang dengan sudo: sudo $0"; exit 1
     fi
 }
 
 # Panggil di awal
 check_sudo
 show_loading_animation
-check_ai_dependencies # Panggil setelah loading agar pesan tidak tertimpa
+check_ai_dependencies
 
 # Fungsi untuk menampilkan seni ASCII
 show_ascii_art() {
@@ -228,7 +197,7 @@ echo -e "${DEFAULT_COLOR}"
 echo -e "${BOLD_MAGENTA}=======================================================================${DEFAULT_COLOR}"
 echo -e "${BOLD_MAGENTA}                        PRA CLEAN UTILITY                             ${DEFAULT_COLOR}"
 echo -e "${BOLD_MAGENTA}=======================================================================${DEFAULT_COLOR}"
-echo -e "${CYAN}                     Developed by: jayyidsptr                       ${DEFAULT_COLOR}"
+echo -e "${CYAN}                        Developed by: jayyidsptr                       ${DEFAULT_COLOR}"
 echo -e "${CYAN}                 https://github.com/jayyidsptr                      ${DEFAULT_COLOR}"
 if [ "$AI_DEPENDENCIES_MET" -eq 1 ]; then
     if [ "$GLOW_INSTALLED" -eq 1 ]; then
@@ -247,15 +216,11 @@ press_enter_to_continue() {
 }
 
 # --- Fungsi Pembersihan ---
-# (Fungsi-fungsi pembersihan seperti clean_apt, remove_specific_packages, clean_var_log, dll.
-#  tetap sama seperti sebelumnya, dengan integrasi AI yang sudah ada)
 
 # 1. Pembersihan Apt-get
 clean_apt() {
-    echo
-    echo -e "  ${INFO_PREFIX} Membersihkan cache apt-get..."
-    apt-get autoclean -y
-    apt-get clean -y
+    echo; echo -e "  ${INFO_PREFIX} Membersihkan cache apt-get..."
+    apt-get autoclean -y && apt-get clean -y
     echo -e "  ${INFO_PREFIX} Menghapus paket yang tidak terpakai (autoremove)..."
     apt-get autoremove -y
     echo -e "  ${SUCCESS_PREFIX} Pembersihan apt-get selesai."
@@ -264,72 +229,60 @@ clean_apt() {
 
 # 2. Hapus Paket Tertentu
 remove_specific_packages() {
-    echo
-    echo -e "  ${INFO_PREFIX} Menghapus perangkat lunak tertentu yang tidak diinginkan..."
-    read -p "$(echo -e "  ${QUESTION_PREFIX} Masukkan nama paket yang akan dihapus (pisahkan dengan spasi, biarkan kosong untuk melewati): ")" packages_to_remove
+    echo; echo -e "  ${INFO_PREFIX} Menghapus perangkat lunak tertentu..."
+    read -p "$(echo -e "  ${QUESTION_PREFIX} Masukkan nama paket (pisahkan spasi, kosongkan untuk batal): ")" packages_to_remove
     if [ -n "$packages_to_remove" ]; then
         if [ "$AI_DEPENDENCIES_MET" -eq 1 ]; then
-            read -p "$(echo -e "  ${QUESTION_PREFIX} Ingin penjelasan AI tentang dampak menghapus paket '${BOLD_YELLOW}${packages_to_remove}${DEFAULT_COLOR}'? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_pkg
+            read -p "$(echo -e "  ${QUESTION_PREFIX} Info AI dampak hapus '${BOLD_YELLOW}${packages_to_remove}${DEFAULT_COLOR}'? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_pkg
             if [[ "$explain_pkg" =~ ^[Yy]$ ]]; then
-                jelaskan_dengan_ai "sudo apt-get remove $packages_to_remove" "Pengguna ingin menghapus paket '$packages_to_remove' dari sistem."
+                local prompt="Anda adalah AI asisten sistem Linux. Jelaskan fungsi utama paket Linux '$packages_to_remove', dependensi pentingnya, dan potensi risiko jika paket ini dihapus dari sistem server standar (misalnya Ubuntu Server). Berikan juga saran apakah umumnya aman untuk dihapus atau jika ada alternatif. Format dalam Markdown."
+                ask_ai_gemini "$prompt"
             fi
         fi
-        read -p "$(echo -e "  ${WARNING_PREFIX} Anda YAKIN ingin menghapus paket '${BOLD_RED}${packages_to_remove}${DEFAULT_COLOR}'? Operasi ini tidak dapat diurungkan. (${BOLD_GREEN}yes${DEFAULT_COLOR}/${BOLD_RED}NO${DEFAULT_COLOR}): ")" confirm_remove_pkg
+        read -p "$(echo -e "  ${WARNING_PREFIX} YAKIN hapus '${BOLD_RED}${packages_to_remove}${DEFAULT_COLOR}'? (${BOLD_GREEN}yes${DEFAULT_COLOR}/${BOLD_RED}NO${DEFAULT_COLOR}): ")" confirm_remove_pkg
         if [[ "$confirm_remove_pkg" == "yes" ]]; then
             # shellcheck disable=SC2086
             apt-get remove $packages_to_remove -y
             echo -e "  ${SUCCESS_PREFIX} Penghapusan paket '${packages_to_remove}' selesai."
-        else
-             echo -e "  ${SKIPPED_PREFIX} Penghapusan paket '${packages_to_remove}' dibatalkan."
-        fi
-    else
-        echo -e "  ${SKIPPED_PREFIX} Tidak ada paket yang ditentukan untuk dihapus."
-    fi
+        else echo -e "  ${SKIPPED_PREFIX} Penghapusan paket '${packages_to_remove}' dibatalkan."; fi
+    else echo -e "  ${SKIPPED_PREFIX} Tidak ada paket yang ditentukan."; fi
     press_enter_to_continue
 }
 
 # 3. Bersihkan Log Lama (/var/log)
 clean_var_log() {
-    echo
-    local perintah_log="sudo rm -rf /var/log/* (atau find /var/log -mindepth 1 -delete)"
+    echo; local perintah_log_desc="membersihkan isi /var/log"
+    local perintah_log_cmd="find /var/log -mindepth 1 -depth -delete"
     echo -e "  ${INFO_PREFIX} Membersihkan log lama di /var/log..."
-    echo -e "  ${WARNING_PREFIX} Perintah berikutnya akan menghapus SEMUA file dan direktori di /var/log (kecuali yang sedang aktif digunakan sistem)."
-    echo -e "  ${YELLOW}Anda mungkin ingin memeriksa file log besar terlebih dahulu menggunakan: cd /var/log && du -h . | sort -hr | head -n 10${DEFAULT_COLOR}"
-
+    echo -e "  ${WARNING_PREFIX} Ini akan menghapus SEMUA konten di /var/log (kecuali file aktif)."
+    echo -e "  ${YELLOW}Periksa file besar dulu: cd /var/log && du -h . | sort -hr | head -n 10${DEFAULT_COLOR}"
     if [ "$AI_DEPENDENCIES_MET" -eq 1 ]; then
-        read -p "$(echo -e "  ${QUESTION_PREFIX} Ingin penjelasan dari AI Gemini tentang perintah ini? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_choice
+        read -p "$(echo -e "  ${QUESTION_PREFIX} Penjelasan AI tentang ${perintah_log_desc}? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_choice
         if [[ "$explain_choice" =~ ^[Yy]$ ]]; then
-            jelaskan_dengan_ai "$perintah_log" "Skrip ini akan membersihkan semua log di /var/log untuk membebaskan ruang."
+            local prompt="Anda adalah AI asisten sistem Linux. Jelaskan perintah '$perintah_log_cmd'. Fokus pada: apa yang dilakukannya, file/direktori terdampak, potensi risiko (misalnya kehilangan log penting jika belum di-backup), dan apakah ini praktik umum yang aman. Format dalam Markdown."
+            ask_ai_gemini "$prompt"
         fi
     fi
-
-    read -p "$(echo -e "  ${QUESTION_PREFIX} Lanjutkan menghapus semua konten di /var/log? (${BOLD_GREEN}yes${DEFAULT_COLOR}/${BOLD_RED}NO${DEFAULT_COLOR}): ")" confirm_var_log
+    read -p "$(echo -e "  ${QUESTION_PREFIX} Lanjutkan menghapus isi /var/log? (${BOLD_GREEN}yes${DEFAULT_COLOR}/${BOLD_RED}NO${DEFAULT_COLOR}): ")" confirm_var_log
     if [[ "$confirm_var_log" == "yes" ]]; then
         find /var/log -mindepth 1 -depth -print0 | xargs -0 --no-run-if-empty rm -rf
-        echo -e "  ${SUCCESS_PREFIX} Konten di /var/log telah dibersihkan (file yang sedang digunakan mungkin tidak terhapus)."
-    else
-        echo -e "  ${SKIPPED_PREFIX} Pembersihan /var/log dilewati oleh pengguna."
-    fi
+        echo -e "  ${SUCCESS_PREFIX} Konten /var/log dibersihkan."
+    else echo -e "  ${SKIPPED_PREFIX} Pembersihan /var/log dilewati."; fi
     press_enter_to_continue
 }
 
-# 4. Konfigurasi dan Bersihkan Journald (Systemd Logs)
+# 4. Konfigurasi dan Bersihkan Journald
 configure_clean_journald() {
-    echo
-    echo -e "  ${INFO_PREFIX} Mengkonfigurasi dan membersihkan systemd journald..."
-    local current_max_use
-    local current_max_file_size
-    current_max_use=$(grep -Po '^SystemMaxUse=\K[^ ]+' /etc/systemd/journald.conf 2>/dev/null || echo "Tidak diatur")
-    current_max_file_size=$(grep -Po '^SystemMaxFileSize=\K[^ ]+' /etc/systemd/journald.conf 2>/dev/null || echo "Tidak diatur")
-
-    echo -e "  ${CYAN}Konfigurasi saat ini:${DEFAULT_COLOR}"
-    echo -e "    SystemMaxUse: ${BOLD_YELLOW}${current_max_use}${DEFAULT_COLOR}"
-    echo -e "    SystemMaxFileSize: ${BOLD_YELLOW}${current_max_file_size}${DEFAULT_COLOR}"
-    echo
-    read -p "$(echo -e "  ${QUESTION_PREFIX} Apakah Anda ingin mengubah konfigurasi ukuran log journald? (${BOLD_GREEN}yes${DEFAULT_COLOR}/${BOLD_RED}NO${DEFAULT_COLOR}): ")" change_conf
-    if [[ "$change_conf" == "yes" ]]; then
-        read -p "$(echo -e "  ${QUESTION_PREFIX} Atur SystemMaxUse (cth: 1G, 500M, kosongkan untuk tidak mengubah): ")" new_max_use
-        read -p "$(echo -e "  ${QUESTION_PREFIX} Atur SystemMaxFileSize (cth: 50M, 100M, kosongkan untuk tidak mengubah): ")" new_max_file_size
+    echo; echo -e "  ${INFO_PREFIX} Mengkonfigurasi & membersihkan systemd journald..."
+    # (Implementasi fungsi ini tetap sama seperti sebelumnya, dengan opsi AI untuk menjelaskan perintah journalctl)
+    # ... (kode dari versi sebelumnya untuk configure_clean_journald dengan sedikit penyesuaian prompt AI jika perlu)
+    local current_max_use; current_max_use=$(grep -Po '^SystemMaxUse=\K[^ ]+' /etc/systemd/journald.conf 2>/dev/null || echo "Tidak diatur")
+    local current_max_file_size; current_max_file_size=$(grep -Po '^SystemMaxFileSize=\K[^ ]+' /etc/systemd/journald.conf 2>/dev/null || echo "Tidak diatur")
+    echo -e "  ${CYAN}Konfigurasi saat ini: SystemMaxUse=${BOLD_YELLOW}${current_max_use}${DEFAULT_COLOR}, SystemMaxFileSize=${BOLD_YELLOW}${current_max_file_size}${DEFAULT_COLOR}${DEFAULT_COLOR}"
+    read -p "$(echo -e "  ${QUESTION_PREFIX} Ubah konfigurasi ukuran log journald? (${BOLD_GREEN}y${DEFAULT_COLOR}/N): ")" change_conf
+    if [[ "$change_conf" =~ ^[Yy]$ ]]; then
+        read -p "$(echo -e "  ${QUESTION_PREFIX} SystemMaxUse (cth: 1G, kosongkan untuk tidak mengubah): ")" new_max_use
+        read -p "$(echo -e "  ${QUESTION_PREFIX} SystemMaxFileSize (cth: 50M, kosongkan untuk tidak mengubah): ")" new_max_file_size
         if [ -f /etc/systemd/journald.conf ]; then
             if [ -n "$new_max_use" ]; then
                 if grep -q "^SystemMaxUse=" /etc/systemd/journald.conf; then sed -i "s/^SystemMaxUse=.*/SystemMaxUse=${new_max_use}/" /etc/systemd/journald.conf; else sed -i '/\[Journal\]/a SystemMaxUse='"${new_max_use}" /etc/systemd/journald.conf; fi
@@ -340,32 +293,29 @@ configure_clean_journald() {
                 echo -e "  ${INFO_PREFIX} SystemMaxFileSize diatur ke ${new_max_file_size}."
             fi
             if [ -n "$new_max_use" ] || [ -n "$new_max_file_size" ]; then
-                 echo -e "  ${INFO_PREFIX} Merestart systemd-journald..."
-                 systemctl restart systemd-journald
+                 echo -e "  ${INFO_PREFIX} Merestart systemd-journald..."; systemctl restart systemd-journald
             else echo -e "  ${INFO_PREFIX} Tidak ada perubahan konfigurasi."; fi
         else echo -e "  ${WARNING_PREFIX} /etc/systemd/journald.conf tidak ditemukan."; fi
     fi; echo
     echo -e "  ${INFO_PREFIX} Membersihkan log systemd journal..."
-    local vacuum_time_cmd="journalctl --vacuum-time="
-    local vacuum_size_cmd="journalctl --vacuum-size="
-    read -p "$(echo -e "  ${QUESTION_PREFIX} Bersihkan log berdasarkan waktu? (cth: 2d, kosongkan untuk melewati): ")" vacuum_time
+    read -p "$(echo -e "  ${QUESTION_PREFIX} Bersihkan log berdasarkan waktu? (cth: 2d, kosongkan): ")" vacuum_time
     if [ -n "$vacuum_time" ]; then
-        local cmd_to_explain_time="${vacuum_time_cmd}${vacuum_time}"
+        local cmd_explain="journalctl --vacuum-time=${vacuum_time}"
         if [ "$AI_DEPENDENCIES_MET" -eq 1 ]; then
-            read -p "$(echo -e "  ${QUESTION_PREFIX} Penjelasan AI untuk '${BOLD_YELLOW}${cmd_to_explain_time}${DEFAULT_COLOR}'? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_vtime
-            if [[ "$explain_vtime" =~ ^[Yy]$ ]]; then jelaskan_dengan_ai "$cmd_to_explain_time" "Membersihkan log journald berdasarkan waktu."; fi
+            read -p "$(echo -e "  ${QUESTION_PREFIX} Penjelasan AI untuk '${BOLD_YELLOW}${cmd_explain}${DEFAULT_COLOR}'? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_ai
+            if [[ "$explain_ai" =~ ^[Yy]$ ]]; then ask_ai_gemini "Jelaskan perintah Linux '$cmd_explain' untuk membersihkan log journald berdasarkan waktu. Fokus pada apa yang dilakukannya dan dampaknya. Format Markdown."; fi
         fi
-        $cmd_to_explain_time
+        eval "$cmd_explain" # Gunakan eval jika variabel mengandung opsi
         echo -e "  ${INFO_PREFIX} Log journald > ${vacuum_time} dibersihkan."
     fi
-    read -p "$(echo -e "  ${QUESTION_PREFIX} Bersihkan log berdasarkan ukuran? (cth: 100M, kosongkan untuk melewati): ")" vacuum_size
+    read -p "$(echo -e "  ${QUESTION_PREFIX} Bersihkan log berdasarkan ukuran? (cth: 100M, kosongkan): ")" vacuum_size
     if [ -n "$vacuum_size" ]; then
-        local cmd_to_explain_size="${vacuum_size_cmd}${vacuum_size}"
+        local cmd_explain="journalctl --vacuum-size=${vacuum_size}"
         if [ "$AI_DEPENDENCIES_MET" -eq 1 ]; then
-            read -p "$(echo -e "  ${QUESTION_PREFIX} Penjelasan AI untuk '${BOLD_YELLOW}${cmd_to_explain_size}${DEFAULT_COLOR}'? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_vsize
-            if [[ "$explain_vsize" =~ ^[Yy]$ ]]; then jelaskan_dengan_ai "$cmd_to_explain_size" "Membersihkan log journald berdasarkan ukuran."; fi
+            read -p "$(echo -e "  ${QUESTION_PREFIX} Penjelasan AI untuk '${BOLD_YELLOW}${cmd_explain}${DEFAULT_COLOR}'? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_ai
+            if [[ "$explain_ai" =~ ^[Yy]$ ]]; then ask_ai_gemini "Jelaskan perintah Linux '$cmd_explain' untuk membersihkan log journald berdasarkan ukuran. Fokus pada apa yang dilakukannya dan dampaknya. Format Markdown."; fi
         fi
-        $cmd_to_explain_size
+        eval "$cmd_explain"
         echo -e "  ${INFO_PREFIX} Log journald dibatasi hingga ${vacuum_size}."
     fi
     echo -e "  ${SUCCESS_PREFIX} Pembersihan & konfigurasi Journald selesai."
@@ -374,14 +324,16 @@ configure_clean_journald() {
 
 # 5. Hapus File Sementara (/tmp)
 clean_tmp_files() {
-    echo
-    local cmd_tmp_desc="membersihkan /tmp"
+    # (Implementasi fungsi ini tetap sama seperti sebelumnya, dengan opsi AI)
+    echo; local cmd_tmp_desc="membersihkan /tmp"
     local cmd_tmp_actual="find /tmp -mindepth 1 -delete"
     echo -e "  ${INFO_PREFIX} Membersihkan file sementara di /tmp..."
     echo -e "  ${WARNING_PREFIX} Ini akan menghapus semua konten di /tmp."
     if [ "$AI_DEPENDENCIES_MET" -eq 1 ]; then
         read -p "$(echo -e "  ${QUESTION_PREFIX} Penjelasan AI tentang dampak ${cmd_tmp_desc}? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_tmp_cmd
-        if [[ "$explain_tmp_cmd" =~ ^[Yy]$ ]]; then jelaskan_dengan_ai "$cmd_tmp_actual" "Membersihkan isi direktori /tmp."; fi
+        if [[ "$explain_tmp_cmd" =~ ^[Yy]$ ]]; then 
+            ask_ai_gemini "Anda adalah AI asisten sistem Linux. Jelaskan perintah '$cmd_tmp_actual' untuk membersihkan isi direktori /tmp. Fokus pada: apa yang dilakukannya, mengapa /tmp digunakan, risiko menghapus isinya (misalnya jika ada aplikasi aktif yang menggunakan file di sana), dan apakah ini praktik umum yang aman. Format dalam Markdown."
+        fi
     fi
     read -p "$(echo -e "  ${QUESTION_PREFIX} Lanjutkan menghapus semua file di /tmp? (${BOLD_GREEN}yes${DEFAULT_COLOR}/${BOLD_RED}NO${DEFAULT_COLOR}): ")" confirm_tmp
     if [[ "$confirm_tmp" == "yes" ]]; then
@@ -393,9 +345,9 @@ clean_tmp_files() {
 
 # 6. Bersihkan Cache Pengguna (~/.cache)
 clean_user_cache() {
+    # (Implementasi fungsi ini tetap sama seperti sebelumnya, dengan opsi AI)
     echo
-    local user_home
-    user_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    local user_home; user_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
     local user_cache_dir="$user_home/.cache"
     if [ -z "$user_home" ] || [ ! -d "$user_cache_dir" ]; then
         echo -e "  ${WARNING_PREFIX} Tidak dapat menemukan cache untuk $SUDO_USER ($user_cache_dir). Melewati."
@@ -407,7 +359,9 @@ clean_user_cache() {
     echo -e "  ${WARNING_PREFIX} Ini akan menghapus semua file di ${user_cache_dir}."
     if [ "$AI_DEPENDENCIES_MET" -eq 1 ]; then
         read -p "$(echo -e "  ${QUESTION_PREFIX} Penjelasan AI tentang dampak membersihkan ${user_cache_dir}? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_user_cache_cmd
-        if [[ "$explain_user_cache_cmd" =~ ^[Yy]$ ]]; then jelaskan_dengan_ai "find $user_cache_dir -mindepth 1 -delete" "Membersihkan cache pengguna $SUDO_USER ($user_cache_dir)."; fi
+        if [[ "$explain_user_cache_cmd" =~ ^[Yy]$ ]]; then 
+            ask_ai_gemini "Anda adalah AI asisten sistem Linux. Jelaskan dampak dari membersihkan direktori '$user_cache_dir' untuk pengguna '$SUDO_USER'. Apa saja jenis data yang biasanya disimpan di sana? Apakah aman untuk menghapusnya? Apakah akan ada efek samping (misalnya aplikasi perlu membuat ulang cache)? Format dalam Markdown."
+        fi
     fi
     read -p "$(echo -e "  ${QUESTION_PREFIX} Lanjutkan menghapus semua file di ${user_cache_dir}? (${BOLD_GREEN}yes${DEFAULT_COLOR}/${BOLD_RED}NO${DEFAULT_COLOR}): ")" confirm_user_cache
     if [[ "$confirm_user_cache" == "yes" ]]; then
@@ -419,6 +373,7 @@ clean_user_cache() {
 
 # --- Sub Menu Pembersihan Cache Aplikasi ---
 submenu_app_cache_cleanup() {
+    # (Implementasi fungsi ini tetap sama)
     while true; do
         clear; show_ascii_art 
         echo -e "  ╭────────────────────────────────────────────────────╮"
@@ -510,6 +465,7 @@ clean_gradle_cache() {
 
 # 12. Pembersihan Docker
 clean_docker() {
+    # (Implementasi fungsi ini tetap sama seperti sebelumnya, dengan opsi AI untuk menjelaskan docker system prune -a)
     echo; echo -e "  ${INFO_PREFIX} Memulai Pembersihan Docker..."
     if ! command -v docker &> /dev/null; then
         echo -e "  ${SKIPPED_PREFIX} docker tidak ditemukan."; press_enter_to_continue; return
@@ -519,7 +475,9 @@ clean_docker() {
     echo -e "  ${INFO_PREFIX} Perintah Docker berdampak besar: '${BOLD_YELLOW}${cmd_docker_system_prune_a}${DEFAULT_COLOR}'."
     if [ "$AI_DEPENDENCIES_MET" -eq 1 ]; then
         read -p "$(echo -e "  ${QUESTION_PREFIX} Penjelasan AI untuk '${BOLD_YELLOW}${cmd_docker_system_prune_a}${DEFAULT_COLOR}'? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_docker_cmd
-        if [[ "$explain_docker_cmd" =~ ^[Yy]$ ]]; then jelaskan_dengan_ai "$cmd_docker_system_prune_a" "Pembersihan sistem Docker menyeluruh."; fi
+        if [[ "$explain_docker_cmd" =~ ^[Yy]$ ]]; then 
+            ask_ai_gemini "Anda adalah AI asisten sistem Linux. Jelaskan perintah '$cmd_docker_system_prune_a'. Fokus pada: apa saja yang dihapus (images, containers, volumes, networks, build cache), perbedaan dengan 'docker system prune' tanpa '-a', potensi risiko (kehilangan data jika tidak hati-hati), dan kapan sebaiknya digunakan. Format dalam Markdown."
+        fi
     fi
     echo -e "  ${CYAN}Menampilkan Image Docker:${DEFAULT_COLOR}"; docker images -a; echo
     echo -e "  ${INFO_PREFIX} Memangkas image Docker menggantung..."; docker image prune -f; echo
@@ -547,13 +505,14 @@ clean_docker() {
 
 # --- Sub Menu Utilitas Sistem ---
 submenu_system_utilities() {
+    # (Implementasi fungsi ini tetap sama)
     while true; do
         clear; show_ascii_art 
         echo -e "  ╭────────────────────────────────────────────────────╮"
         echo -e "  │ ${BOLD_WHITE}Utilitas Sistem${DEFAULT_COLOR}                                  │"
         echo -e "  ├────────────────────────────────────────────────────┤"
-        echo -e "  │ ${BOLD_YELLOW}1.${DEFAULT_COLOR} Analisis Penggunaan Disk                         │"
-        echo -e "  │ ${BOLD_YELLOW}2.${DEFAULT_COLOR} Tinjau Log Sistem Penting                      │"
+        echo -e "  │ ${BOLD_YELLOW}1.${DEFAULT_COLOR} Analisis Penggunaan Disk ${CYAN}(AI Ready)${DEFAULT_COLOR}             │"
+        echo -e "  │ ${BOLD_YELLOW}2.${DEFAULT_COLOR} Tinjau Log Sistem Penting ${CYAN}(AI Ready)${DEFAULT_COLOR}          │"
         echo -e "  │ ${BOLD_YELLOW}0.${DEFAULT_COLOR} ${BOLD_RED}Kembali ke Menu Utama${DEFAULT_COLOR}                       │"
         echo -e "  ╰────────────────────────────────────────────────────╯"
         read -p "$(echo -e "  ${BOLD_WHITE}Pilihan Anda [0-2]: ${DEFAULT_COLOR}")" util_choice
@@ -563,6 +522,7 @@ submenu_system_utilities() {
         esac
     done
 }
+
 analyze_disk_usage() {
     echo; echo -e "  ${INFO_PREFIX} Menganalisis penggunaan disk..."
     echo -e "  ${CYAN}Penggunaan disk keseluruhan:${DEFAULT_COLOR}"; df -h | sed 's/^/    /'; echo
@@ -576,16 +536,18 @@ analyze_disk_usage() {
                 read -p "$(echo -e "  ${QUESTION_PREFIX} Saran optimasi AI untuk ${BOLD_YELLOW}${specific_path}${DEFAULT_COLOR}? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_disk_opt
                 if [[ "$explain_disk_opt" =~ ^[Yy]$ ]]; then
                     local disk_info; disk_info=$(du -sh "$specific_path"/* 2>/dev/null | sort -rh | head -n 20)
-                    jelaskan_dengan_ai "Data penggunaan disk: $specific_path \n$disk_info" "Berikan saran optimasi ruang disk untuk path '$specific_path'."
+                    local prompt="Anda adalah AI asisten sistem Linux. Pengguna meminta saran optimasi ruang disk untuk path '${specific_path}'. Berikut adalah detail penggunaan disk di dalamnya:\n${disk_info}\n\nBerikan saran umum dan aman tentang bagaimana pengguna bisa mengoptimalkan atau membersihkan ruang disk di path ini. Fokus pada identifikasi jenis file yang biasanya aman untuk dihapus (seperti cache aplikasi, log lama, file unduhan yang tidak terpakai) atau yang mungkin bisa diarsip. Ingatkan pengguna untuk selalu berhati-hati dan mem-backup data penting sebelum menghapus. Format dalam Markdown."
+                    ask_ai_gemini "$prompt"
                 fi
             fi
         else echo -e "  ${ERROR_PREFIX} Direktori tidak ditemukan: $specific_path"; fi
     fi
     press_enter_to_continue
 }
+
 review_system_logs() {
     echo; echo -e "  ${INFO_PREFIX} Meninjau log sistem penting..."
-    local log_file; local num_lines=20
+    local log_file; local num_lines=30 # Perbanyak baris untuk konteks AI
     PS3="$(echo -e "  ${QUESTION_PREFIX}Pilih log (atau 0 untuk kembali): ${DEFAULT_COLOR}")"
     options=("/var/log/syslog" "/var/log/auth.log" "/var/log/kern.log" "/var/log/dpkg.log" "Path Kustom" "Kembali")
     echo; COLUMNS=1 
@@ -602,14 +564,15 @@ review_system_logs() {
     done </dev/tty
     if [ -n "$log_file" ] && [ -f "$log_file" ]; then
         read -p "$(echo -e "  ${QUESTION_PREFIX}Baris terakhir (default: $num_lines)? ${DEFAULT_COLOR}")" lines_input
-        if [[ "$lines_input" =~ ^[0-9]+$ ]]; then num_lines="$lines_input"; fi
+        if [[ "$lines_input" =~ ^[0-9]+$ ]] && [ "$lines_input" -gt 0 ]; then num_lines="$lines_input"; fi
         echo -e "  ${CYAN}Menampilkan ${num_lines} baris terakhir dari ${log_file}:${DEFAULT_COLOR}"
         tail -n "$num_lines" "$log_file" | sed 's/^/    /'; echo
         if [ "$AI_DEPENDENCIES_MET" -eq 1 ]; then
             read -p "$(echo -e "  ${QUESTION_PREFIX} Analisis AI untuk log ini? (${BOLD_GREEN}Y${DEFAULT_COLOR}/n): ")" explain_log_ai
             if [[ "$explain_log_ai" =~ ^[Yy]$ ]]; then
                 local log_snippet; log_snippet=$(tail -n "$num_lines" "$log_file")
-                jelaskan_dengan_ai "Analisis potongan log dari '${log_file}'. Cari error, warning, isu keamanan signifikan:\n\n${log_snippet}" "Analisis AI untuk log '$log_file'."
+                local prompt="Anda adalah AI analis log sistem Linux. Analisis potongan log berikut dari file '${log_file}'. Fokus pada identifikasi dan penjelasan singkat mengenai: \n1. Error yang jelas (misalnya, 'failed', 'error', 'denied').\n2. Warning signifikan yang mungkin memerlukan perhatian.\n3. Pola atau anomali yang mencurigakan (misalnya, percobaan login berulang, aktivitas tidak biasa).\n4. Jika ada, berikan saran tindakan atau investigasi lebih lanjut yang mungkin relevan.\n\nPotongan log:\n\`\`\`\n${log_snippet}\n\`\`\`\nFormat respons dalam Markdown yang terstruktur."
+                ask_ai_gemini "$prompt"
             fi
         fi
     elif [ -n "$log_file" ]; then echo -e "  ${ERROR_PREFIX} Tidak dapat menampilkan log: $log_file"; fi
@@ -619,23 +582,33 @@ review_system_logs() {
 # Fungsi untuk menjalankan semua tugas pembersihan
 run_all_cleanup() {
     clear; show_ascii_art; echo
-    echo -e "  ${INFO_PREFIX} Menjalankan SEMUA tugas pembersihan..."
+    echo -e "  ${INFO_PREFIX} Menjalankan SEMUA tugas pembersihan utama..."
     echo -e "  ${WARNING_PREFIX} Beberapa tindakan destruktif & perlu konfirmasi individual (termasuk opsi AI)."
     read -p "$(echo -e "  ${QUESTION_PREFIX} Yakin ingin melanjutkan? (${BOLD_GREEN}yes${DEFAULT_COLOR}/${BOLD_RED}NO${DEFAULT_COLOR}): ")" confirm_all
     if [[ "$confirm_all" == "yes" ]]; then
-        funcs_to_run=(clean_apt clean_var_log configure_clean_journald clean_tmp_files clean_user_cache clean_npm_cache clean_pip3_cache clean_go_cache clean_maven_cache clean_gradle_cache clean_docker)
-        for func_name in "${funcs_to_run[@]}"; do
+        # Daftar fungsi pembersihan utama yang akan dijalankan
+        # Tidak termasuk pembersihan cache aplikasi individual karena itu ada di submenu
+        # dan biasanya lebih spesifik kebutuhan pengguna.
+        local main_cleanup_funcs=(
+            clean_apt
+            clean_var_log
+            configure_clean_journald 
+            clean_tmp_files
+            clean_user_cache
+            clean_docker # Docker cleanup adalah operasi besar, jadi dimasukkan
+        )
+        for func_name in "${main_cleanup_funcs[@]}"; do
             clear; show_ascii_art
-            # Untuk fungsi cache aplikasi, tampilkan header submenu
-            if [[ "$func_name" =~ ^(clean_npm_cache|clean_pip3_cache|clean_go_cache|clean_maven_cache|clean_gradle_cache)$ ]]; then
-                 echo -e "  ╭────────────────────────────────────────────────────╮"
-                 echo -e "  │ ${BOLD_WHITE}Pembersihan Cache Aplikasi${DEFAULT_COLOR} > ${BOLD_CYAN}${func_name//clean_/}${func_name//_cache/}         │" # Judul dinamis
-                 echo -e "  ╰────────────────────────────────────────────────────╯"
+            echo -e "  ${BOLD_CYAN}>>> Menjalankan: ${func_name//_/ } <<<${DEFAULT_COLOR}"
+            # Panggil fungsi
+            if declare -f "$func_name" > /dev/null; then
+                "$func_name" # Ini akan memanggil press_enter_to_continue di dalamnya
+            else
+                echo -e "  ${ERROR_PREFIX} Fungsi ${func_name} tidak ditemukan."
+                press_enter_to_continue
             fi
-            $func_name # Panggil fungsi
-            # Tidak perlu press_enter_to_continue di sini karena sudah ada di dalam setiap fungsi
         done
-        echo -e "  ${SUCCESS_PREFIX} SEMUA tugas pembersihan telah dijalankan."
+        echo -e "  ${SUCCESS_PREFIX} SEMUA tugas pembersihan utama telah dijalankan (sesuai konfirmasi individual)."
     else
         echo -e "  ${SKIPPED_PREFIX} Operasi 'Jalankan Semua' dibatalkan."
     fi
@@ -649,18 +622,21 @@ show_main_menu() {
     echo -e "  │ ${BOLD_WHITE}Pilih opsi pembersihan atau utilitas:${DEFAULT_COLOR}                     │"
     echo -e "  ├───────────────────────────────────────────────────────────┤"
     echo -e "  │ ${BOLD_YELLOW}Pembersihan Sistem Umum:${DEFAULT_COLOR}                                  │"
-    echo -e "  │   ${BOLD_YELLOW}1.${DEFAULT_COLOR} Bersihkan Cache Apt-get                              │"
-    echo -e "  │   ${BOLD_YELLOW}2.${DEFAULT_COLOR} Hapus Paket Tertentu ${CYAN}(AI Ready)${DEFAULT_COLOR}                      │"
-    echo -e "  │   ${BOLD_YELLOW}3.${DEFAULT_COLOR} Bersihkan Log Lama (/var/log) ${CYAN}(AI Ready)${DEFAULT_COLOR}             │"
-    echo -e "  │   ${BOLD_YELLOW}4.${DEFAULT_COLOR} Konfigurasi & Bersihkan Journald ${CYAN}(AI Ready)${DEFAULT_COLOR}          │"
-    echo -e "  │   ${BOLD_YELLOW}5.${DEFAULT_COLOR} Hapus File Sementara (/tmp) ${CYAN}(AI Ready)${DEFAULT_COLOR}               │"
-    echo -e "  │   ${BOLD_YELLOW}6.${DEFAULT_COLOR} Bersihkan Cache Pengguna (~/.cache) ${CYAN}(AI Ready)${DEFAULT_COLOR}       │"
-    echo -e "  │   ${BOLD_YELLOW}7.${DEFAULT_COLOR} Pembersihan Cache Aplikasi (NPM, Pip, Go, dll.)      │"
-    echo -e "  │   ${BOLD_YELLOW}8.${DEFAULT_COLOR} Pembersihan Docker Lengkap ${CYAN}(AI Ready)${DEFAULT_COLOR}                │"
-    echo -e "  │   ${BOLD_YELLOW}9.${DEFAULT_COLOR} Utilitas Sistem (Analisis Disk ${CYAN}(AI Ready)${DEFAULT_COLOR})           │"
+    echo -e "  │   ${BOLD_YELLOW}1.${DEFAULT_COLOR} Bersihkan Cache Apt-get                               │"
+    echo -e "  │   ${BOLD_YELLOW}2.${DEFAULT_COLOR} Hapus Paket Tertentu ${CYAN}(AI Info)${DEFAULT_COLOR}                       │"
+    echo -e "  │   ${BOLD_YELLOW}3.${DEFAULT_COLOR} Bersihkan Log Lama (/var/log) ${CYAN}(AI Explain)${DEFAULT_COLOR}           │"
+    echo -e "  │   ${BOLD_YELLOW}4.${DEFAULT_COLOR} Konfigurasi & Bersihkan Journald ${CYAN}(AI Explain)${DEFAULT_COLOR}       │"
+    echo -e "  │   ${BOLD_YELLOW}5.${DEFAULT_COLOR} Hapus File Sementara (/tmp) ${CYAN}(AI Explain)${DEFAULT_COLOR}              │"
+    echo -e "  │   ${BOLD_YELLOW}6.${DEFAULT_COLOR} Bersihkan Cache Pengguna (~/.cache) ${CYAN}(AI Explain)${DEFAULT_COLOR}      │"
+    echo -e "  │ ${BOLD_YELLOW}Pembersihan Cache Aplikasi:${DEFAULT_COLOR}                               │"
+    echo -e "  │   ${BOLD_YELLOW}7.${DEFAULT_COLOR} Pembersihan Cache Aplikasi (NPM, Pip, Go, dll.)       │"
+    echo -e "  │ ${BOLD_YELLOW}Pembersihan Docker:${DEFAULT_COLOR}                                       │"
+    echo -e "  │   ${BOLD_YELLOW}8.${DEFAULT_COLOR} Pembersihan Docker Lengkap ${CYAN}(AI Explain)${DEFAULT_COLOR}              │"
+    echo -e "  │ ${BOLD_YELLOW}Utilitas Sistem:${DEFAULT_COLOR}                                          │"
+    echo -e "  │   ${BOLD_YELLOW}9.${DEFAULT_COLOR} Utilitas (Analisis Disk ${CYAN}(AI Suggest)${DEFAULT_COLOR}, Tinjau Log ${CYAN}(AI Analyze)${DEFAULT_COLOR})│"
     echo -e "  ├───────────────────────────────────────────────────────────┤"
-    echo -e "  │ ${BOLD_GREEN}13. JALANKAN SEMUA Tugas Pembersihan Utama${DEFAULT_COLOR}                │"
-    echo -e "  │ ${BOLD_RED} 0. Keluar${DEFAULT_COLOR}                                                │"
+    echo -e "  │ ${BOLD_GREEN}13. JALANKAN SEMUA Pembersihan Utama${DEFAULT_COLOR}                       │"
+    echo -e "  │ ${BOLD_RED} 0. Keluar${DEFAULT_COLOR}                                                   │"
     echo -e "  ╰───────────────────────────────────────────────────────────╯"
 }
 
