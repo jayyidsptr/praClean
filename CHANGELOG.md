@@ -12,6 +12,8 @@ Format mengikuti semangat Keep a Changelog dan proyek menggunakan Semantic Versi
 - Opsi `--no-ai` untuk menonaktifkan Gemini AI.
 - Opsi `--help` dengan ringkasan penggunaan.
 - Konfirmasi interaktif berbasis tombol panah/D-pad dengan shortcut `y`/`n`.
+- Tampilan terminal modern: banner responsif, panel menu, mode compact, dan navigasi menu pakai D-pad/tombol panah.
+- Fallback tampilan untuk terminal lawas via `PRA_CLEAN_ASCII=1` dan dukungan `NO_COLOR`.
 - Prompt API key Gemini saat fitur AI dipakai dan key belum tersedia.
 - Validasi input paket, ukuran journald, durasi vacuum, dan jumlah baris log.
 - Backup otomatis untuk `/etc/systemd/journald.conf` sebelum perubahan nyata.
