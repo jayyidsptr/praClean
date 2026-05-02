@@ -11,6 +11,7 @@ Format mengikuti semangat Keep a Changelog dan proyek menggunakan Semantic Versi
 - Mode `--dry-run` untuk simulasi tanpa mengubah sistem.
 - Opsi `--no-ai` untuk menonaktifkan Gemini AI.
 - Opsi `--help` dengan ringkasan penggunaan.
+- Konfirmasi interaktif berbasis tombol panah/D-pad dengan shortcut `y`/`n`.
 - Prompt API key Gemini saat fitur AI dipakai dan key belum tersedia.
 - Validasi input paket, ukuran journald, durasi vacuum, dan jumlah baris log.
 - Backup otomatis untuk `/etc/systemd/journald.conf` sebelum perubahan nyata.

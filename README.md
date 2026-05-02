@@ -10,7 +10,7 @@ PRA CLEAN Utility adalah skrip Bash interaktif untuk membantu membersihkan dan m
 
 ## Fitur Utama
 
-- **Menu interaktif berwarna** dengan prompt konfirmasi untuk aksi destruktif.
+- **Menu interaktif berwarna** dengan konfirmasi pakai tombol panah/D-pad dan shortcut `y`/`n`.
 - **Mode simulasi (`--dry-run`)** untuk melihat rencana aksi tanpa mengubah sistem.
 - **Pembersihan APT**: `autoclean`, `clean`, dan `autoremove`.
 - **Hapus paket tertentu** dengan validasi nama paket dan info AI opsional.
@@ -68,6 +68,8 @@ Mode simulasi tanpa menghapus/mengubah sistem:
 ```bash
 sudo ./praClean.sh --dry-run
 ```
+
+Konfirmasi aksi destruktif bisa dipilih dengan tombol `↑`/`↓` atau `←`/`→`, lalu `Enter`. Shortcut `y` dan `n` tetap tersedia.
 
 Nonaktifkan AI sepenuhnya:
 

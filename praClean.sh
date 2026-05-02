@@ -70,9 +70,41 @@ parse_args() {
 safe_clear() { [ -t 1 ] && command clear || true; }
 
 confirm() {
-  local message="$1" answer
-  read -r -p "$(echo -e "  ${QUESTION_PREFIX} ${message} (${BOLD_GREEN}yes${DEFAULT_COLOR}/${BOLD_RED}NO${DEFAULT_COLOR}): ")" answer || true
-  [[ "${answer:-}" == "yes" ]]
+  local message="$1" answer selected=1 key rest yes_label no_label hint
+
+  if [ ! -t 0 ]; then
+    read -r -p "$(echo -e "  ${QUESTION_PREFIX} ${message} (${BOLD_GREEN}yes${DEFAULT_COLOR}/${BOLD_RED}NO${DEFAULT_COLOR}): ")" answer || true
+    [[ "${answer:-}" == "yes" ]]
+    return
+  fi
+
+  hint="${YELLOW}(↑/↓ atau ←/→, Enter pilih, y/n cepat)${DEFAULT_COLOR}"
+  while true; do
+    if (( selected == 0 )); then
+      yes_label="${BOLD_GREEN}▶ YES ◀${DEFAULT_COLOR}"
+      no_label="${RED}  NO   ${DEFAULT_COLOR}"
+    else
+      yes_label="${GREEN}  YES  ${DEFAULT_COLOR}"
+      no_label="${BOLD_RED}▶ NO ◀${DEFAULT_COLOR}"
+    fi
+
+    printf '\r\033[K  %b %s  %b  %b  %b' "$QUESTION_PREFIX" "$message" "$yes_label" "$no_label" "$hint"
+    IFS= read -rsn1 key || { echo; return 1; }
+
+    case "$key" in
+      "") echo; (( selected == 0 )); return ;;
+      [Yy]) selected=0; echo; return 0 ;;
+      [Nn]) selected=1; echo; return 1 ;;
+      $'\e')
+        rest=""
+        IFS= read -rsn2 -t 0.1 rest || true
+        case "$rest" in
+          '[A'|'[B'|'[C'|'[D') selected=$((1 - selected)) ;;
+          *) echo; return 1 ;;
+        esac
+        ;;
+    esac
+  done
 }
 
 prompt_default() {
@@ -151,9 +183,8 @@ ensure_gemini_api_key() {
   (( AI_ENABLED && AI_DEPENDENCIES_MET )) || return 1
   [ -n "${GEMINI_API_KEY:-}" ] && return 0
 
-  local answer entered_key
-  read -r -p "$(echo -e "  ${QUESTION_PREFIX} API key Gemini kosong. Isi sekarang? (${BOLD_GREEN}y${DEFAULT_COLOR}/N): ")" answer || true
-  [[ "${answer:-}" =~ ^[Yy]$ ]] || return 1
+  local entered_key
+  confirm "API key Gemini kosong. Isi sekarang" || return 1
   read -r -s -p "$(echo -e "  ${QUESTION_PREFIX} Masukkan API key Gemini: ")" entered_key || true
   echo
   [ -n "${entered_key:-}" ] || return 1
@@ -341,15 +372,14 @@ set_journald_value() {
 }
 
 configure_clean_journald() {
-  local conf=/etc/systemd/journald.conf current_use current_file change max_use max_file vacuum_time vacuum_size backup
+  local conf=/etc/systemd/journald.conf current_use current_file max_use max_file vacuum_time vacuum_size backup
   print_section "Konfigurasi & Vacuum Journald"
 
   current_use=$(grep -Po '^SystemMaxUse=\K.*' "$conf" 2>/dev/null || echo "Tidak diatur")
   current_file=$(grep -Po '^SystemMaxFileSize=\K.*' "$conf" 2>/dev/null || echo "Tidak diatur")
   echo -e "  ${CYAN}Saat ini: SystemMaxUse=${BOLD_YELLOW}${current_use}${DEFAULT_COLOR}, SystemMaxFileSize=${BOLD_YELLOW}${current_file}${DEFAULT_COLOR}"
 
-  read -r -p "$(echo -e "  ${QUESTION_PREFIX} Ubah batas ukuran journald? (${BOLD_GREEN}y${DEFAULT_COLOR}/N): ")" change || true
-  if [[ "${change:-}" =~ ^[Yy]$ ]]; then
+  if confirm "Ubah batas ukuran journald"; then
     read -r -p "$(echo -e "  ${QUESTION_PREFIX} SystemMaxUse (mis: 1G, kosong=skip): ")" max_use || true
     read -r -p "$(echo -e "  ${QUESTION_PREFIX} SystemMaxFileSize (mis: 50M, kosong=skip): ")" max_file || true
 
@@ -391,7 +421,7 @@ configure_clean_journald() {
 }
 
 clean_tmp_files() {
-  local days all_answer
+  local days
   print_section "Pembersihan /tmp"
   echo -e "  ${WARNING_PREFIX} Default aman: hapus item /tmp lebih tua dari N hari."
   days=$(prompt_default "Hapus item lebih tua dari berapa hari" "7")
@@ -401,8 +431,8 @@ clean_tmp_files() {
     return
   fi
 
-  read -r -p "$(echo -e "  ${QUESTION_PREFIX} Paksa hapus SEMUA isi /tmp? (${BOLD_RED}berisiko${DEFAULT_COLOR}) (${BOLD_GREEN}yes${DEFAULT_COLOR}/NO): ")" all_answer || true
-  if [[ "${all_answer:-}" == "yes" ]]; then
+  echo -e "  ${WARNING_PREFIX} Opsi hapus semua /tmp berisiko untuk aplikasi aktif."
+  if confirm "Paksa hapus SEMUA isi /tmp"; then
     if confirm "Konfirmasi ulang: hapus SEMUA isi /tmp"; then
       if (( DRY_RUN )); then
         echo -e "  ${DRY_PREFIX} Item /tmp kandidat hapus:"
@@ -562,7 +592,7 @@ clean_docker() {
 
 # ========== Utilitas sistem ==========
 analyze_disk_usage() {
-  local path answer
+  local path
   print_section "Analisis Penggunaan Disk"
   echo -e "  ${CYAN}Filesystem:${DEFAULT_COLOR}"
   df -h | sed 's/^/    /'
@@ -574,8 +604,7 @@ analyze_disk_usage() {
     if [ -d "$path" ]; then
       echo -e "  ${CYAN}Top item di ${path}:${DEFAULT_COLOR}"
       du -xh --max-depth=1 "$path" 2>/dev/null | sort -rh | head -n 20 | sed 's/^/    /'
-      read -r -p "$(echo -e "  ${QUESTION_PREFIX} Minta saran AI untuk path ini? (${BOLD_GREEN}y${DEFAULT_COLOR}/N): ")" answer || true
-      [[ "${answer:-}" =~ ^[Yy]$ ]] && ask_ai_gemini "Beri saran aman mengosongkan ruang pada path: $path. Pisahkan file aman dihapus, perlu backup, dan jangan disentuh."
+      confirm "Minta saran AI untuk path ini" && ask_ai_gemini "Beri saran aman mengosongkan ruang pada path: $path. Pisahkan file aman dihapus, perlu backup, dan jangan disentuh."
     else
       echo -e "  ${ERROR_PREFIX} Direktori tidak ditemukan: $path"
     fi
@@ -584,7 +613,7 @@ analyze_disk_usage() {
 }
 
 review_system_logs() {
-  local log_file lines custom choice analyze snippet
+  local log_file lines custom choice snippet
   print_section "Tinjau Log Sistem"
   echo -e "  ${BOLD_YELLOW}1.${DEFAULT_COLOR} /var/log/syslog"
   echo -e "  ${BOLD_YELLOW}2.${DEFAULT_COLOR} /var/log/auth.log"
@@ -609,8 +638,7 @@ review_system_logs() {
   is_valid_positive_int "$lines" || lines=30
   tail -n "$lines" "$log_file" | sed 's/^/    /'
 
-  read -r -p "$(echo -e "  ${QUESTION_PREFIX} Analisis AI untuk log ini? (${BOLD_GREEN}y${DEFAULT_COLOR}/N): ")" analyze || true
-  if [[ "${analyze:-}" =~ ^[Yy]$ ]]; then
+  if confirm "Analisis AI untuk log ini"; then
     snippet=$(tail -n "$lines" "$log_file")
     ask_ai_gemini "Analisis potongan log berikut. Ringkas error/warning, kemungkinan sebab, dan aksi aman:\n\`\`\`\n${snippet}\n\`\`\`"
   fi
