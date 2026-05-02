@@ -1,137 +1,125 @@
-# PRA CLEAN Utility (AI-Enhanced)
+# PRA CLEAN Utility
 
-## Deskripsi Singkat Proyek
-
-PRA CLEAN Utility adalah sebuah skrip Bash interaktif yang canggih, dirancang untuk membantu pengguna membersihkan, mengelola, dan memahami server Linux mereka (khususnya distribusi berbasis Debian seperti Ubuntu). Skrip ini menyediakan berbagai opsi pembersihan sistem, cache aplikasi, log, dan utilitas Docker, serta beberapa alat bantu sistem tambahan. Yang membuatnya unik adalah **integrasi dengan AI Gemini** untuk memberikan penjelasan perintah, analisis log, dan saran optimasi, semuanya dalam antarmuka menu yang mudah digunakan, berwarna, dan dengan rendering Markdown yang lebih baik jika `glow` terinstal.
+PRA CLEAN Utility adalah skrip Bash interaktif untuk membantu membersihkan dan memantau server Linux berbasis Debian/Ubuntu. Skrip ini fokus pada pembersihan cache sistem, log, cache aplikasi, Docker, analisis disk, dan tinjauan log. Fitur Gemini AI tersedia opsional untuk menjelaskan risiko penghapusan paket, memberi saran optimasi disk, dan menganalisis potongan log.
 
 **Dikembangkan oleh:** jayyidsptr
-**GitHub:** [https://github.com/jayyidsptr](https://github.com/jayyidsptr)
 
-## Tangkapan Layar (Screenshot)
+**GitHub:** https://github.com/jayyidsptr
 
-Berikut adalah tampilan dari PRA CLEAN Utility saat dijalankan:
-
-![PRA CLEAN Utility Screenshot](assets/screenshot_praclean.png "PRA CLEAN Utility sedang berjalan")
+![PRA CLEAN Utility Screenshot](assets/screenshot_praclean.png "PRA CLEAN Utility")
 
 ## Fitur Utama
 
-* **Antarmuka Interaktif Berwarna Modern:** Menu yang mudah dinavigasi dengan output berwarna, animasi loading, dan bingkai menu yang lebih rapi.
-* **Integrasi AI Gemini (Eksperimental):**
-    * **Penjelasan Perintah Berisiko:** Dapatkan penjelasan detail dari AI Gemini tentang perintah-perintah sistem yang berpotensi berbahaya sebelum menjalankannya.
-    * **Analisis Log dengan AI:** Minta AI Gemini untuk menganalisis potongan log sistem dan memberikan ringkasan potensi masalah atau error.
-    * **Saran Optimasi Disk dengan AI:** Dapatkan saran dari AI Gemini tentang cara mengoptimalkan ruang disk berdasarkan analisis direktori tertentu.
-    * **Penjelasan Dampak Penghapusan Paket:** Pahami lebih baik apa fungsi sebuah paket dan potensi dampaknya sebelum menghapusnya.
-* **Rendering Markdown yang Ditingkatkan:** Jika `glow` terinstal, penjelasan AI akan ditampilkan dalam format Markdown yang rapi di terminal.
-* **Pembersihan Sistem Umum:**
-    * Membersihkan cache `apt-get` (`autoclean`, `clean`).
-    * Menghapus paket yang tidak lagi diperlukan (`autoremove`).
-    * Opsi untuk menghapus paket tertentu yang ditentukan pengguna (dengan opsi penjelasan AI).
-    * Membersihkan log lama di direktori `/var/log` (dengan opsi penjelasan AI).
-    * Mengkonfigurasi dan membersihkan log `journald` (Systemd Logs) yang interaktif (dengan opsi penjelasan AI).
-    * Menghapus file sementara di `/tmp` (dengan opsi penjelasan AI).
-    * Membersihkan cache pengguna di `~/.cache` (dengan opsi penjelasan AI dan deteksi pengguna `sudo`).
-* **Pembersihan Cache Aplikasi (Sub-menu):**
-    * Membersihkan cache NPM, Pip3, Go, Maven, dan Gradle (berusaha berjalan sebagai pengguna `$SUDO_USER`).
-* **Pembersihan Docker (dengan opsi penjelasan AI):**
-    * Memangkas image Docker yang menggantung.
-    * Opsi untuk memangkas semua image Docker yang tidak terpakai.
-    * Memangkas volume Docker yang tidak terpakai.
-    * Melakukan `docker system prune` (termasuk opsi `-a`).
-    * Memangkas cache builder Docker.
-* **Utilitas Sistem:**
-    * **Analisis Penggunaan Disk:** Menampilkan penggunaan disk keseluruhan dan direktori teratas, serta opsi untuk menganalisis path tertentu (dengan opsi saran optimasi AI).
-    * **Tinjau Log Sistem Penting:** Memungkinkan pengguna untuk melihat beberapa baris terakhir dari log sistem umum atau log kustom (dengan opsi analisis AI).
-* **Pemeriksaan Hak Akses `sudo` & Dependensi:** Skrip secara otomatis memeriksa hak akses root dan dependensi yang diperlukan (termasuk untuk fitur AI).
-* **Konfirmasi Pengguna:** Meminta konfirmasi untuk operasi yang berpotensi destruktif.
-* **Opsi "Jalankan Semua":** Untuk menjalankan sebagian besar tugas pembersihan secara berurutan.
+- **Menu interaktif berwarna** dengan prompt konfirmasi untuk aksi destruktif.
+- **Mode simulasi (`--dry-run`)** untuk melihat rencana aksi tanpa mengubah sistem.
+- **Pembersihan APT**: `autoclean`, `clean`, dan `autoremove`.
+- **Hapus paket tertentu** dengan validasi nama paket dan info AI opsional.
+- **Pembersihan `/var/log`**: truncate log aktif dan hapus arsip log lama.
+- **Konfigurasi journald**: ubah `SystemMaxUse`, `SystemMaxFileSize`, backup config, dan vacuum berdasarkan waktu/ukuran.
+- **Pembersihan `/tmp` lebih aman**: default hanya item lebih tua dari jumlah hari tertentu; hapus semua butuh konfirmasi ganda.
+- **Pembersihan cache pengguna**: default hanya cache lebih tua dari jumlah hari tertentu.
+- **Pembersihan cache aplikasi**: NPM, Pip3, Go, Maven, dan Gradle.
+- **Pembersihan Docker bertahap**: setiap operasi prune punya konfirmasi sendiri, termasuk volume.
+- **Utilitas sistem**: analisis disk dan review log sistem.
+- **Gemini AI opsional**: API key bisa dari env atau dimasukkan saat fitur AI dipakai.
 
 ## Persyaratan
 
-* **Sistem Operasi:** Distribusi Linux berbasis Debian (misalnya, Ubuntu, Linux Mint).
-* **Bash Shell.**
-* **Perintah Sistem Standar:** `apt-get`, `journalctl`, `rm`, `find`, `du`, `df`, `docker`, `npm`, `pip3`, `go`, `mvn`, `gradle` (jika terinstal).
-* **Hak Akses `sudo`:** Diperlukan untuk sebagian besar operasi.
-* **Untuk Fitur AI Gemini:**
-    * **`curl`:** Untuk membuat permintaan API.
-    * **`jq`:** Untuk mem-parsing respons JSON dari API.
-    * **Koneksi Internet Aktif.**
-    * **API Key Gemini:** Dari Google AI Studio atau Vertex AI.
-    * **`glow` (Opsional, Sangat Direkomendasikan):** Untuk rendering output Markdown dari AI yang jauh lebih baik di terminal. (Kunjungi: [https://github.com/charmbracelet/glow](https://github.com/charmbracelet/glow))
+- Debian/Ubuntu atau distro kompatibel dengan `apt-get` dan `systemd`.
+- Bash.
+- Hak akses root via `sudo`.
+- Tool standar: `find`, `du`, `df`, `tail`, `sed`, `grep`, `getent`.
+- Opsional sesuai fitur: `docker`, `npm`, `pip3`, `go`, `gradle`.
+- Untuk AI: `curl`, `jq`, koneksi internet, dan API key Gemini.
+- Opsional untuk tampilan AI: `glow`.
 
-## Cara Penggunaan
+## Instalasi
 
-1.  **Unduh/Clone Skrip:**
-    ```bash
-    git clone [https://github.com/jayyidsptr/praClean.git](https://github.com/jayyidsptr/praClean.git)
-    cd praClean
-    ```
+```bash
+git clone https://github.com/jayyidsptr/praClean.git
+cd praClean
+chmod +x praClean.sh
+```
 
-2.  **Instal Dependensi (jika belum ada):**
-    ```bash
-    sudo apt update
-    sudo apt install curl jq -y
-    # Opsional tapi sangat direkomendasikan untuk tampilan AI yang lebih baik:
-    # Ikuti petunjuk instalasi 'glow' dari halaman GitHub mereka.
-    # Contoh (mungkin berbeda tergantung distribusi/versi):
-    # sudo mkdir -p /etc/apt/keyrings
-    # curl -fsSL [https://repo.charm.sh/apt/gpg.key](https://repo.charm.sh/apt/gpg.key) | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
-    # echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] [https://repo.charm.sh/apt/](https://repo.charm.sh/apt/) * *" | sudo tee /etc/apt/sources.list.d/charm.list
-    # sudo apt update && sudo apt install glow
-    ```
+Dependensi AI opsional:
 
-3.  **Buat Skrip Dapat Dieksekusi:**
-    ```bash
-    chmod +x praClean.sh 
-    ```
+```bash
+sudo apt update
+sudo apt install curl jq -y
+```
 
-4.  **Atur API Key Gemini (Opsional, tapi disarankan untuk penggunaan berulang):**
-    Anda dapat mengatur variabel environment `PRA_CLEAN_GEMINI_API_KEY` dengan API Key Anda.
-    ```bash
-    export PRA_CLEAN_GEMINI_API_KEY="API_KEY_ANDA_DISINI"
-    ```
-    Jika tidak diatur, skrip akan meminta API Key saat fitur AI pertama kali digunakan.
+## Penggunaan
 
-5.  **Jalankan Skrip:**
-    Jalankan skrip dengan `sudo`. Jika Anda mengatur environment variable di atas, gunakan opsi `-E` dengan `sudo` agar variabel tersebut diteruskan.
-    ```bash
-    sudo -E ./praClean.sh 
-    # atau jika tidak mengatur env var:
-    # sudo ./praClean.sh
-    ```
+Jalankan normal:
 
-6.  **Navigasi Menu:**
-    Ikuti menu interaktif. Opsi yang terintegrasi dengan AI akan ditandai.
+```bash
+sudo ./praClean.sh
+```
 
-## Dukungan & Donasi
+Jalankan dengan Gemini API key dari environment:
 
-Jika Anda merasa skrip ini bermanfaat dan ingin mendukung pengembangan lebih lanjut, Anda dapat memberikan donasi melalui platform berikut:
+```bash
+export PRA_CLEAN_GEMINI_API_KEY="API_KEY_ANDA"
+sudo -E ./praClean.sh
+```
 
-<p align="left">
-  <a href="https://trakteer.id/jayyidsptr" target="_blank">
-    <img src="https://img.shields.io/badge/Dukung%20Saya%20di-Trakteer-FF750A?style=for-the-badge&logo=trakteer&logoColor=white" alt="Dukung Saya di Trakteer">
-  </a>
-  <a href="https://saweria.co/jayyidsaputra" target="_blank">
-    <img src="https://img.shields.io/badge/Donasi%20via-Saweria-20C659?style=for-the-badge&logo=saweria&logoColor=white" alt="Donasi via Saweria">
-  </a>
-</p>
+Mode simulasi tanpa menghapus/mengubah sistem:
 
-Setiap dukungan sangat berarti! Terima kasih.
+```bash
+sudo ./praClean.sh --dry-run
+```
 
-## Peringatan Penting
+Nonaktifkan AI sepenuhnya:
 
-* **JALANKAN DENGAN HATI-HATI:** Skrip ini melakukan operasi yang dapat menghapus file dan mengubah konfigurasi sistem.
-* **BACKUP DATA ANDA:** Sebelum menjalankan skrip ini, terutama pada sistem produksi, **buatlah backup data Anda**.
-* **FITUR AI EKSPERIMENTAL:** Penjelasan dan saran dari AI Gemini bersifat sebagai panduan dan mungkin tidak selalu 100% akurat atau lengkap. Selalu gunakan penilaian Anda sendiri dan verifikasi informasi jika ragu. Pengembang tidak bertanggung jawab atas keputusan yang diambil berdasarkan output AI.
-* **PAHAMI APA YANG ANDA LAKUKAN:** Pastikan Anda memahami tindakan apa yang akan dilakukan oleh setiap opsi sebelum melanjutkannya.
+```bash
+sudo ./praClean.sh --no-ai
+```
 
-## Lisensi
+Tampilkan bantuan:
 
-Proyek ini dilisensikan di bawah [Lisensi MIT](LICENSE).
+```bash
+./praClean.sh --help
+```
+
+## Catatan Keamanan
+
+- Jalankan `--dry-run` dulu pada server penting.
+- Backup data sebelum menjalankan pembersihan di server produksi.
+- Docker volume prune dapat menghapus data volume tidak terpakai; skrip meminta konfirmasi khusus sebelum menjalankannya.
+- Fitur AI hanya membantu analisis; keputusan akhir tetap di pengguna.
+- API key Gemini tidak dikirim lewat query string; skrip memakai header `x-goog-api-key` via config sementara dengan permission `600`.
+
+## Struktur Proyek
+
+```text
+.
+├── assets/
+│   └── screenshot_praclean.png
+├── praClean.sh          # Skrip utama
+├── praclean-bckp.sh     # Launcher kompatibilitas ke skrip utama
+├── README.md
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+└── LICENSE
+```
+
+## Validasi Developer
+
+```bash
+bash -n praClean.sh
+bash -n praclean-bckp.sh
+```
+
+Jika tersedia, jalankan juga:
+
+```bash
+shellcheck praClean.sh praclean-bckp.sh
+```
 
 ## Kontribusi
 
-Kontribusi dalam bentuk laporan bug, permintaan fitur, atau *pull request* sangat diterima. Silakan buka *issue* di repositori GitHub untuk diskusi lebih lanjut. Lihat [CONTRIBUTING.md](CONTRIBUTING.md).
+Kontribusi bug report, ide fitur, dokumentasi, dan pull request diterima. Lihat `CONTRIBUTING.md`.
 
----
+## Lisensi
 
-Semoga PRA CLEAN Utility (AI-Enhanced) bermanfaat!
+MIT. Lihat `LICENSE`.

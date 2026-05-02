@@ -1,85 +1,44 @@
-Changelog PRA CLEAN Utility
-Semua perubahan penting pada proyek ini akan didokumentasikan dalam file ini.
+# Changelog PRA CLEAN Utility
 
-Formatnya didasarkan pada Keep a Changelog,
-dan proyek ini menganut Semantic Versioning.
+Semua perubahan penting proyek ini didokumentasikan di sini.
 
-[Belum Dirilis]
-Ditambahkan
-Fitur atau peningkatan baru yang belum dirilis.
+Format mengikuti semangat Keep a Changelog dan proyek menggunakan Semantic Versioning.
 
-Diubah
-Perubahan pada fungsionalitas yang sudah ada.
+## [1.1.0] - 2026-05-02
 
-Tidak Digunakan Lagi (Deprecated)
-Fitur yang akan dihapus di rilis mendatang.
+### Ditambahkan
 
-Dihapus
-Fitur yang telah dihapus.
+- Mode `--dry-run` untuk simulasi tanpa mengubah sistem.
+- Opsi `--no-ai` untuk menonaktifkan Gemini AI.
+- Opsi `--help` dengan ringkasan penggunaan.
+- Prompt API key Gemini saat fitur AI dipakai dan key belum tersedia.
+- Validasi input paket, ukuran journald, durasi vacuum, dan jumlah baris log.
+- Backup otomatis untuk `/etc/systemd/journald.conf` sebelum perubahan nyata.
+- Pembersihan `/tmp` berbasis umur file sebagai default aman.
+- Pembersihan cache pengguna berbasis umur file sebagai default aman.
+- Konfirmasi terpisah untuk setiap operasi Docker prune.
 
-Diperbaiki
-Perbaikan bug.
+### Diubah
 
-Keamanan
-Perbaikan terkait kerentanan keamanan.
+- Skrip utama direfaktor menjadi fungsi `main` dengan parsing argumen.
+- Gemini API key dikirim lewat header, bukan query string URL.
+- Docker prune tidak lagi menjalankan operasi agresif tanpa konfirmasi khusus.
+- Review log tidak lagi memakai `select`; menu angka eksplisit lebih jelas.
+- README disinkronkan dengan perilaku aktual skrip.
 
-[1.0.0] - YYYY-MM-DD
-Ini adalah rilis awal dari PRA CLEAN Utility.
+### Keamanan
 
-Ditambahkan
-Seni ASCII "PRA CLEAN" dan kredit developer.
+- Hapus semua isi `/tmp` sekarang butuh konfirmasi ganda.
+- Penghapusan paket memakai array dan validasi nama paket.
+- Temporary config/payload AI dibuat dengan permission `600` lalu dihapus.
 
-Menu utama interaktif dengan opsi pembersihan sistem dasar.
+## [1.0.0] - 2025-01-01
 
-Pembersihan Sistem Umum:
+### Ditambahkan
 
-Pembersihan Cache Apt-get (autoclean, clean, autoremove).
-
-Opsi Hapus Paket Tertentu.
-
-Pembersihan Log Lama (/var/log).
-
-Konfigurasi & Pembersihan Journald (Systemd Logs) yang interaktif.
-
-Penghapusan File Sementara (/tmp).
-
-Pembersihan Cache Pengguna (~/.cache) dengan deteksi pengguna sudo.
-
-Pembersihan Cache Aplikasi (Sub-menu):
-
-Pembersihan Cache NPM.
-
-Pembersihan Cache Pip3.
-
-Pembersihan Cache Go.
-
-Pembersihan Cache Maven.
-
-Pembersihan Cache Gradle.
-(Semua pembersihan cache aplikasi mencoba berjalan sebagai pengguna $SUDO_USER).
-
-Pembersihan Docker:
-
-Pembersihan image, volume, system prune, dan builder cache Docker yang komprehensif.
-
-Utilitas Sistem (Sub-menu):
-
-Analisis Penggunaan Disk (keseluruhan, direktori teratas, path spesifik).
-
-Tinjau Log Sistem Penting (syslog, auth.log, dll., atau kustom).
-
-Opsi "JALANKAN SEMUA Tugas Pembersihan Utama".
-
-Pemeriksaan hak akses sudo di awal skrip.
-
-Pesan berwarna untuk output yang lebih baik.
-
-Fungsi press_enter_to_continue untuk pengalaman pengguna yang lebih baik.
-
-Contoh Penggunaan Versi Sebelumnya:
-
-[0.1.0] - YYYY-MM-DD (Contoh Versi Fiktif Sebelumnya)
-Ditambahkan
-Fungsi pembersihan apt-get dasar.
-
-Menu awal yang sangat sederhana.
+- Menu interaktif PRA CLEAN.
+- Pembersihan APT, `/var/log`, journald, `/tmp`, dan cache pengguna.
+- Pembersihan cache NPM, Pip3, Go, Maven, dan Gradle.
+- Pembersihan Docker dasar.
+- Analisis disk dan tinjau log sistem.
+- Integrasi awal Gemini AI.
